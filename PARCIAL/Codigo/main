@@ -1,0 +1,644 @@
+import ply.lex as lex
+import csv
+from collections import deque
+import re
+
+# ANALIZADOR LEXICO
+# Lista de Tokens
+tokens = (
+    # Inicio y Fin
+    'P_func',
+    # Atributos
+    'T_int',
+    'T_float',
+    'T_bool',
+    'T_string',
+    # Numeros
+    'num',
+    # Valores de Bool
+    'Bool_True',
+    'Bool_False',
+    # Controladores / Palabras Clave
+    'B_if',
+    'B_else',
+    'B_for',
+    'B_while',
+    'P_return',
+    'P_print',
+    'P_read',
+    # Simbolos y Signos
+    'S_par_izq',
+    'S_par_der',
+    'S_llave_izq',
+    'S_llave_der',
+    'O_or',
+    'O_and',
+    'O_not',
+    'O_op_coma',
+    'O_op_suma',
+    'O_op_resta',
+    'O_op_mult',
+    'O_op_div',
+    'O_op_equal',
+    'O_op_mayor',
+    'O_op_menor',
+    'O_op_mayorequal',
+    'O_op_menorequal',
+    'O_op_equalequal',
+
+    # Textos
+    'text',
+    # Variables y Funciones (ID)
+    'id',
+    'ikey',
+)
+
+# Expresiones regulares
+# Tokens prioritarios
+def t_P_func(t):
+  r'func'
+  return t
+
+def t_T_int(t):
+  r'int'
+  return t
+
+def t_T_float(t):
+  r'float'
+  return t
+
+def t_T_bool(t):
+  r'bool'
+  return t
+
+def t_Bool_True(t):
+  r'True'
+  return t
+
+def t_Bool_False(t):
+  r'False'
+  return t
+def t_T_string(t):
+  r'string'
+  return t
+
+def t_B_if(t):
+  r'if'
+  return t
+
+def t_B_else(t):
+  r'else'
+  return t
+
+def t_B_for(t):
+  r'for'
+  return t
+                                                      
+def t_B_while(t):
+  r'while'
+  return t
+    
+def t_P_return(t):
+  r'return'
+  return t
+
+def t_P_print(t):
+  r'print'
+  return t
+
+def t_P_read(t):
+  r'read'
+  return t
+
+# Textos
+def t_text(t):
+    r'("[a-zA-Z0-9 ]*")'
+    return t
+
+# Variables y Funciones
+def t_id(t):
+    r'[a-zA-Z][a-zA-Z0-9]*'
+    return t
+def t_ikey(t):
+    r'_[a-zA-Z][a-zA-Z0-9]*_'
+    return t
+
+# Numeros
+def t_num(t):
+  r'\d+(\.\d+)?'
+  if '.' in t.value:
+      t.value = float(t.value)
+  else:
+      t.value = int(t.value)
+  return t
+
+
+
+# Tokens con expresiones regulares más simples
+t_ignore = ' \t'
+
+# Simbolos y Signos
+t_S_par_izq = r'\('
+t_S_par_der = r'\)'
+t_S_llave_izq = r'\['
+t_S_llave_der = r'\]'
+t_O_or = r'\|\|'
+t_O_and = r'&&'
+t_O_not = r'\!'
+t_O_op_coma = r'\,'
+t_O_op_suma = r'\+'
+t_O_op_resta = r'\-'
+t_O_op_mult = r'\*'
+t_O_op_div = r'\/'
+t_O_op_equal = r'\='
+t_O_op_mayor = r'\>'
+t_O_op_menor = r'\<'
+t_O_op_mayorequal = r'\>='
+t_O_op_menorequal = r'\<='
+t_O_op_equalequal = r'\=='
+
+
+# Define a rule so we can track line numbers
+def t_newline(t):
+    r'\n+'
+    t.lexer.lineno += len(t.value)
+
+# Error handling rule
+def t_error(t):
+    print(f"Illegal character '{t.value[0]}'")
+    t.lexer.skip(1)
+
+# Build the lexer
+lexer = lex.lex()
+
+# Leer el contenido del archivo
+with open('gramatica1.txt', 'r') as file:
+  data = file.read()
+
+# Darle la entrada al lexer
+lexer.input(data)
+
+# Lista para almacenar los tokens como diccionarios
+tokens_list = []
+
+# Tokenize
+while True:
+  tok = lexer.token()
+  if not tok:
+    break  # No hay más entrada
+  # Crear un diccionario para cada token
+  token_info = {
+    'type': tok.type,
+    'value': tok.value,
+    'line': tok.lineno,
+    'position': tok.lexpos
+  }
+  tokens_list.append(token_info)
+  with open("Input.txt", "w") as f:
+   for token in tokens_list:
+      f.write(f"{token['type']} ")
+   f.write("$\n")  # Añadir $ al final después de todos los tokens
+
+# Escribir los detalles completos de cada token en token_details.txt
+with open("Detalles.txt", "w") as f:
+  for token in tokens_list:
+      f.write(f"Type: {token['type']}, Value: {token['value']}, Line: {token['line']}, Position: {token['position']}\n")
+
+
+# ANALIZADOR SINTACTICO
+
+# Para identificar los terminales y no terminales
+def identificar_terminal_noterminal(rules):
+      non_terminals = set()
+      all_symbols = set()
+
+      for rule in rules:
+          lhs, rhs = re.split(r'\s*->\s*', rule.strip())
+          non_terminals.add(lhs)
+          all_symbols.update(rhs.split())
+
+      return non_terminals, all_symbols - non_terminals
+
+#Para leer la gramatica LL1
+def leer_gramatica(filename):
+  with open(filename, 'r') as file:
+    rules = [line.strip() for line in file if line.strip()]
+  return rules
+
+# Para leer los conjuntos de primeros
+def read_firsts(filename):
+ firsts = {}
+ with open(filename, 'r') as file:
+    for line in file:
+        line = line.strip()
+        if line:
+            non_terminal, elements = line.split(':')
+            elements = [e.strip() for e in elements.split(',')]
+            firsts[non_terminal.strip()] = set(e if e != "''" else 'ε' for e in elements if e)
+ return firsts
+
+# Para hallar los conjuntos de primeros
+def hallar_primeros(rules):
+ firsts = {}
+ change = True
+
+ # Inicializar FIRST para cada no terminal y terminal
+ non_terminals, terminals = identificar_terminal_noterminal(rules)
+ for symbol in non_terminals.union(terminals):
+    firsts[symbol] = set()
+    if symbol in terminals:
+        firsts[symbol].add(symbol)
+
+ while change:
+    change = False
+    for rule in rules:
+        lhs, rhs = rule.split('->')
+        lhs = lhs.strip()
+        rhs = rhs.strip().split()
+
+        original_first = firsts[lhs].copy()
+        can_be_empty = True
+
+        for symbol in rhs:
+            if not can_be_empty:
+                break
+
+            firsts[lhs].update(firsts[symbol] - {EPSILON})
+
+            if EPSILON not in firsts[symbol]:
+                can_be_empty = False
+
+        if can_be_empty:
+            firsts[lhs].add(EPSILON)
+
+        if firsts[lhs] != original_first:
+            change = True
+
+ return firsts
+
+
+# Para hallar los conjuntos de siguientes
+def compute_follows(rules, firsts, start_symbol):
+ follows = {non_terminal: set() for non_terminal in firsts}
+ follows[start_symbol].add('$')  # Añadir el símbolo de fin de archivo al FOLLOW del símbolo de inicio
+
+ changed = True
+ while changed:
+    changed = False
+    for rule in rules:
+        parts = rule.split('->')
+        if len(parts) < 2:
+            continue
+        lhs = parts[0].strip()
+        rhs = parts[1].strip().split()
+
+        trailer = set(follows[lhs])
+        for i in reversed(range(len(rhs))):
+            symbol = rhs[i]
+            if symbol in follows:  # Solo considerar no terminales
+                before_update = len(follows[symbol])
+                # Añadir trailer, excluyendo explícitamente épsilon si está presente
+                follows[symbol].update(trailer)
+                if len(follows[symbol]) > before_update:
+                    changed = True
+                # Si el símbolo puede derivar en épsilon, actualizar el trailer
+                if 'ε' in firsts.get(symbol, set()):
+                    trailer.update(x for x in firsts[symbol] if x != 'ε')
+                else:
+                    trailer = set(firsts.get(symbol, set()))
+            else:
+                if symbol != 'ε':
+                    trailer = {symbol}
+
+ return {k: v for k, v in follows.items() if v}  # Eliminar cualquier conjunto FOLLOW vacío
+
+# Para hallar la tabla de análisis sintáctico
+def read_sets(filename):
+ sets = {}
+ with open(filename, 'r') as file:
+    for line in file:
+        line = line.strip()
+        if line:
+            non_terminal, elements = line.split(':')
+            elements = elements.split(',')
+            sets[non_terminal.strip()] = set(e.strip() if e.strip() != "''" else '' for e in elements if e.strip())
+ return sets
+
+def read_grammar_table(filename):
+  rules = {}
+  with open(filename, 'r') as file:
+      current_nt = None
+      for line in file:
+          line = line.strip()
+          if line:
+              if '->' in line:
+                  lhs, rhs = line.split('->')
+                  lhs, rhs = lhs.strip(), rhs.strip()
+                  if lhs not in rules:
+                      rules[lhs] = []
+                  current_nt = lhs
+                  rules[lhs].append(rhs.split())
+              elif current_nt:
+                  # Continuation of the previous non-terminal's productions
+                  rules[current_nt].append(line.split())
+  return rules
+
+def build_ll1_table(rules, firsts, follows):
+ terminals = set(term for terms in firsts.values() for term in terms if term != '') | {'$'}
+ non_terminals = set(rules.keys())
+ table = {nt: {t: [] for t in terminals} for nt in non_terminals}
+
+ for nt, productions in rules.items():
+    for production in productions:
+        first = calculate_first_of_sequence(production, firsts)
+        for symbol in first - {''}:
+            table[nt][symbol].append(production)
+        if '' in first:
+            for symbol in follows[nt]:
+                table[nt][symbol].append(production)
+
+ return table
+
+def calculate_first_of_sequence(sequence, firsts):
+ result = set()
+ for symbol in sequence:
+    result.update(firsts.get(symbol, {symbol}))
+    if '' not in firsts.get(symbol, {}):
+        result.discard('')
+        break
+ else:
+    result.add('')
+ return result
+
+def print_ll1_table(table, filename):
+  with open(filename, 'w') as file:
+      for nt, row in table.items():
+          file.write(f"FOLLOW({nt}):\n")
+          for terminal, productions in row.items():
+              if productions:
+                  production_str = ' | '.join(' '.join(prod) for prod in productions)
+                  file.write(f"  {terminal}: {production_str}\n")
+              else:
+                  file.write(f"  {terminal}: error\n")
+
+# Para escribir txt con los conjuntos de primeros y siguientes
+def write_sets_to_file(sets, filename, set_type):
+ with open(filename, 'w') as file:
+    for symbol in sorted(sets):
+        set_formatted = ', '.join(sorted(sets[symbol]))
+        file.write(f"{symbol}: {set_formatted}\n")
+
+ print(f"{set_type} sets written to {filename}")
+
+EPSILON = "''"  # Asegúrate de que EPSILON coincida con cómo lo representas en las reglas
+terminals = set()
+
+filename = 'LL1 - oficial.txt'
+rules = leer_gramatica(filename)
+start_symbol = rules[0].split('->')[0].strip()  # Asumir que el primer no terminal es el símbolo de inicio
+
+# Compute FIRST sets
+first = hallar_primeros(rules)
+
+# Filtrar cualquier entrada vacía antes de escribir a archivo
+if '' in first:
+    del first['']
+
+# Escribir los conjuntos FIRST y FOLLOW a archivos
+write_sets_to_file(first, 'first.txt', 'FIRST')
+
+# Compute FOLLOW sets using the computed FIRST sets
+filename_firsts = read_firsts('first.txt')
+follows = compute_follows(rules, filename_firsts, start_symbol)
+write_sets_to_file(follows, 'follow.txt', 'FOLLOW')
+
+firsts_filename = 'first.txt'
+follows_filename = 'follow.txt'
+
+rules_T = read_grammar_table(filename)
+firsts_T = read_sets(firsts_filename)
+follows_T = read_sets(follows_filename)
+
+ll1_table = build_ll1_table(rules_T, firsts_T, follows_T)
+output_filename = 'll1_table.txt'
+print_ll1_table(ll1_table, output_filename)
+print(f"LL(1) analysis table written to {output_filename}")
+
+# ANALISIS 
+
+class Nodo:
+    def __init__(self, simbolo):
+        self.simbolo = simbolo
+        self.hijos = []
+
+    def agregar_hijo(self, hijo):
+        self.hijos.append(hijo)
+
+def cargar_tabla_desde_csv(archivo):
+  tabla = {}
+  with open(archivo, newline='') as csvfile:
+      reader = csv.reader(csvfile)
+      for fila in reader:
+          estado = fila[0]
+          transiciones = fila[1:]
+          tabla[estado] = transiciones
+  return tabla
+
+def analizar_entrada_P(entrada, tabla):
+  pila = ['$', 'MAIN']  # Pila inicial con $ en el fondo y el símbolo inicial S
+  idx_entrada = 0
+  while len(pila) > 0:
+      print("Pila:", pila)
+      print("Entrada:", entrada[idx_entrada:])
+      print("")
+
+      simbolo_actual = pila.pop()
+      if idx_entrada < len(entrada):
+          simbolo_entrada = entrada[idx_entrada]
+
+          if simbolo_actual in tabla:
+              transiciones = tabla[simbolo_actual]
+              accion = transiciones[get_index(simbolo_entrada)]
+
+              if accion != ' -':
+                  if accion != 'e':
+                      produccion = accion.split()
+                      pila.extend(reversed(produccion))
+                  else:
+                      continue
+              else:
+                  continue
+          else:
+              if simbolo_actual == simbolo_entrada:
+                  idx_entrada += 1
+              else:
+                  return False
+      else:
+          return False
+
+  return idx_entrada == len(entrada) and not pila
+
+def analizar_entrada_A(entrada, tabla):
+ raiz = Nodo('S')  # Nodo raíz del árbol
+ pila = [('$', None), ('S', raiz)]  # Se añade el nodo raíz a la pila
+
+ idx_entrada = 0
+ while len(pila) > 0:
+    simbolo_actual, nodo_actual = pila.pop()
+
+    if idx_entrada < len(entrada):
+        simbolo_entrada = entrada[idx_entrada]
+    else:
+        break  # Salida anticipada si no hay más entrada
+
+    if simbolo_actual in tabla:
+        transiciones = tabla[simbolo_actual]
+        accion = transiciones[get_index(simbolo_entrada)]
+
+        if accion != '-':
+            if accion == 'e':  # Manejo de producción épsilon
+                nodo_epsilon = Nodo('e')
+                nodo_actual.agregar_hijo(nodo_epsilon)
+            else:
+                produccion = accion.split()
+                # Añadir nodos a la pila en orden inverso para procesar el izquierdo primero
+                for simbolo in reversed(produccion):
+                    nuevo_nodo = Nodo(simbolo)
+                    nodo_actual.agregar_hijo(nuevo_nodo)
+                    pila.append((simbolo, nuevo_nodo))
+    else:
+        # Si es un símbolo terminal, verificar coincidencia
+        if simbolo_actual == simbolo_entrada:
+            idx_entrada += 1
+        else:
+            return False, None  # Retorno inmediato si no hay coincidencia
+
+ return idx_entrada == len(entrada) and not pila, raiz  # Asegurar que se consumió toda la entrada y la pila esté vacía
+
+
+def generar_dot(nodo, buffer, id=0, parent_id=None):
+    # Si el nodo es None (nodo vacío para epsilon), no hacer nada
+    if nodo is None:
+        return id
+
+    # Definir el nombre del nodo usando su ID para garantizar unicidad
+    node_name = f'node{id}'
+
+    # Crear la declaración del nodo para Graphviz
+    buffer.append(f'{node_name} [label="{nodo.simbolo}"];')
+
+    # Si el nodo tiene un padre, añadir una arista de parent_id a node_name
+    if parent_id is not None:
+        buffer.append(f'{parent_id} -> {node_name};')
+
+    # Recorrer todos los hijos del nodo actual
+    child_id = id + 1
+    for hijo in nodo.hijos:
+        # Llamar recursivamente para cada hijo
+        child_id = generar_dot(hijo, buffer, child_id, node_name)
+
+    # Devolver el próximo ID disponible
+    return child_id
+
+def exportar_arbol_a_dot(raiz):
+    buffer = ['digraph G {']
+    generar_dot(raiz, buffer)
+    buffer.append('}')
+    return '\n'.join(buffer)
+
+def get_index(simbolo):
+  if simbolo == 'P_func':
+      return 0
+  elif simbolo == 'T_int':
+      return 1
+  elif simbolo == 'T_float':
+      return 2
+  elif simbolo == 'T_bool':
+      return 3
+  elif simbolo == 'T_string':
+      return 4
+  elif simbolo == 'num':
+      return 5
+  elif simbolo == 'B_if':
+      return 6
+  elif simbolo == 'B_else':
+      return 7
+  elif simbolo == 'B_for':
+      return 8
+  elif simbolo == 'B_while':
+      return 9
+  elif simbolo == 'text':
+      return 10
+  elif simbolo == 'num':
+      return 11
+  elif simbolo == 'P_return':
+      return 12
+  elif simbolo == 'P_print':
+      return 13
+  elif simbolo == 'P_read':
+      return 14
+  elif simbolo == 'S_par_izq':
+      return 15
+  elif simbolo == 'S_par_der':
+      return 16
+  elif simbolo == 'S_llave_izq':
+      return 17
+  elif simbolo == 'S_llave_der':
+      return 18
+  elif simbolo == 'O_or':
+      return 19
+  elif simbolo == 'O_and':
+      return 20
+  elif simbolo == 'O_not':
+      return 21
+  elif simbolo == 'O_op_coma':
+      return 22
+  elif simbolo == 'O_op_suma':
+      return 23
+  elif simbolo == 'O_op_resta':
+      return 24
+  elif simbolo == 'O_op_mult':
+      return 25
+  elif simbolo == 'O_op_div':
+      return 26
+  elif simbolo == 'O_op_equal':
+      return 27
+  elif simbolo == 'O_op_mayor':
+      return 28
+  elif simbolo == 'O_op_menor':
+      return 29
+  elif simbolo == 'O_op_mayorequal':
+      return 30
+  elif simbolo == 'O_op_menorequal':
+      return 31
+  elif simbolo == 'O_op_equalequal':
+      return 32
+  elif simbolo == '$':
+      return 33
+  elif simbolo == 'id':
+      return 34                                           
+  elif simbolo == 'ikey':
+      return 35
+  else:
+      return -1
+
+archivo_tabla = 'LL1 - PS.csv'
+tabla = cargar_tabla_desde_csv(archivo_tabla)
+
+archivo_entrada = 'Input.txt'  # Nombre del archivo con la entrada
+with open(archivo_entrada, 'r') as file:
+    entrada = file.read().split()  # Lee el archivo y divide la entrada en tokens
+
+if analizar_entrada_P(entrada, tabla):
+    print("La entrada es aceptada por la tabla.")
+else:
+    print("La entrada no es aceptada por la tabla.")
+
+aceptado, raiz = analizar_entrada_A(entrada, tabla)
+if aceptado:
+    print("La entrada es aceptada por la tabla.")
+    codigo_dot = exportar_arbol_a_dot(raiz)
+    with open('arbol_sintactico.dot', 'w') as f:
+        f.write(codigo_dot)
+else:
+    print("La entrada no es aceptada por la tabla.")
