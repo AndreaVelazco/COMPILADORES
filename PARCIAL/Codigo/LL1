@@ -1,0 +1,42 @@
+MAIN -> func par_izq STATEMENT_M par_der
+STATEMENT_M -> STATEMENT STATEMENT_M
+STATEMENT_M -> ''
+STATEMENT -> id OPER E 
+STATEMENT -> WHILE_CTRL
+STATEMENT -> IF_CTRL
+STATEMENT -> IMPRIMIR
+STATEMENT -> FUNCION
+STATEMENT -> RETORNO
+FUNCION -> ikey llave_izq E op_com TERM llave_der
+WHILE_CTRL -> while llave_izq E STATEMENT_M llave_der
+IF_CTRL -> if llave_izq E IMPRIMIR IFELSE_CTRL llave_der
+IFP_CTRL -> IMPRIMIR IFELSE_CTRL
+IFELSE_CTRL -> else llave_izq IMPRIMIR llave_der
+IFELSE_CTRL -> ''
+IMPRIMIR -> print llave_izq E llave_der
+RETORNO -> return llave_izq E STATEMENT_M llave_der E' ASIGNACION
+ASIGNACION -> id OPER E
+E -> T E'
+E -> FUNCION
+E' -> OPER T E'
+E' -> ''
+T -> TERM
+T -> llave_izq E llave_der
+TERM -> id TERM_FUNC
+TERM -> num
+TERM -> bool
+TERM -> text
+TERM_FUNC -> llave_izq PARAM_M llave_der
+TERM_FUNC -> ''
+OPER -> op_suma
+OPER -> op_equal
+OPER -> op_equalequal
+OPER -> op_div
+OPER -> op_rest
+OPER -> op_menor
+OPER -> and
+OPER -> or
+PARAM_M -> E PARAM_E
+PARAM_M -> ''
+PARAM_E -> op_com E PARAM_E
+PARAM_E -> ''
